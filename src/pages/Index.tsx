@@ -25,6 +25,7 @@ export default function Index() {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [fileName, setFileName] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [editingCell, setEditingCell] = useState<{index: number, value: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const { toast } = useToast();
@@ -71,6 +72,104 @@ export default function Index() {
     };
 
     reader.readAsBinaryString(file);
+  };
+
+  const handleExportToExcel = () => {
+    if (filteredItems.length === 0) {
+      toast({
+        title: "Нет данных",
+        description: "Нечего экспортировать",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(filteredItems);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Результаты");
+    
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `складской_учет_${timestamp}.xlsx`);
+    
+    toast({
+      title: "Экспорт завершен",
+      description: `Экспортировано ${filteredItems.length} позиций`,
+    });
+  };
+
+  const handleCellEdit = (index: number, newValue: string) => {
+    const updatedInventory = [...inventory];
+    const itemIndex = inventory.findIndex(item => item === filteredItems[index]);
+    
+    if (itemIndex !== -1) {
+      updatedInventory[itemIndex] = {
+        ...updatedInventory[itemIndex],
+        cell: newValue,
+      };
+      setInventory(updatedInventory);
+      
+      const updatedFiltered = [...filteredItems];
+      updatedFiltered[index] = {
+        ...updatedFiltered[index],
+        cell: newValue,
+      };
+      setFilteredItems(updatedFiltered);
+      
+      toast({
+        title: "Ячейка обновлена",
+        description: `Новое значение: ${newValue}`,
+      });
+    }
+    setEditingCell(null);
+  };
+
+  const handleExportToExcel = () => {
+    if (filteredItems.length === 0) {
+      toast({
+        title: "Нет данных",
+        description: "Нечего экспортировать",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(filteredItems);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Результаты");
+    
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `складской_учет_${timestamp}.xlsx`);
+    
+    toast({
+      title: "Экспорт завершен",
+      description: `Экспортировано ${filteredItems.length} позиций`,
+    });
+  };
+
+  const handleCellEdit = (index: number, newValue: string) => {
+    const updatedInventory = [...inventory];
+    const itemIndex = inventory.findIndex(item => item === filteredItems[index]);
+    
+    if (itemIndex !== -1) {
+      updatedInventory[itemIndex] = {
+        ...updatedInventory[itemIndex],
+        cell: newValue,
+      };
+      setInventory(updatedInventory);
+      
+      const updatedFiltered = [...filteredItems];
+      updatedFiltered[index] = {
+        ...updatedFiltered[index],
+        cell: newValue,
+      };
+      setFilteredItems(updatedFiltered);
+      
+      toast({
+        title: "Ячейка обновлена",
+        description: `Новое значение: ${newValue}`,
+      });
+    }
+    setEditingCell(null);
   };
 
   const handleSearch = (query: string) => {
@@ -272,11 +371,21 @@ export default function Index() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon name="Search" size={20} />
-              Поиск товаров
-            </CardTitle>
-            <CardDescription>Введите артикул или код для поиска</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Icon name="Search" size={20} />
+                  Поиск товаров
+                </CardTitle>
+                <CardDescription>Введите артикул или код для поиска</CardDescription>
+              </div>
+              {filteredItems.length > 0 && (
+                <Button onClick={handleExportToExcel} variant="outline" className="gap-2">
+                  <Icon name="Download" size={16} />
+                  Экспорт
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex gap-2 mb-6">
@@ -331,9 +440,49 @@ export default function Index() {
                         <TableCell className="font-mono">{item.code}</TableCell>
                         <TableCell className="font-medium">{item.article}</TableCell>
                         <TableCell className="text-right">
-                          <Badge variant="outline" className="font-bold text-lg">
-                            {item.cell}
-                          </Badge>
+                          {editingCell?.index === idx ? (
+                            <div className="flex gap-2 justify-end items-center">
+                              <Input
+                                value={editingCell.value}
+                                onChange={(e) => setEditingCell({index: idx, value: e.target.value})}
+                                className="w-24 text-right"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleCellEdit(idx, editingCell.value);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCell(null);
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleCellEdit(idx, editingCell.value)}
+                              >
+                                <Icon name="Check" size={14} />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingCell(null)}
+                              >
+                                <Icon name="X" size={14} />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2 justify-end items-center">
+                              <Badge variant="outline" className="font-bold text-lg">
+                                {item.cell}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditingCell({index: idx, value: item.cell})}
+                              >
+                                <Icon name="Pencil" size={14} />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
